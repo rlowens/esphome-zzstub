@@ -5,7 +5,7 @@ substitutions:
 
 esphome:
   name: ${device_name}
-  name_add_mac_suffix: True
+  name_add_mac_suffix: False
   comment: ${device_description}
 
 esp8266:

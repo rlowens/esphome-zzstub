@@ -5,6 +5,7 @@ substitutions:
 
 esphome:
   name: ${device_name}
+  name_add_mac_suffix: False
   comment: ${device_description}
 
 bk72xx:
@@ -14,15 +15,14 @@ bk72xx:
 
 wifi:
   networks:
-  - ssid: 7G
-    password: "one word"
-  - ssid: 7G2
-    password: "one word"
+  - ssid: !secret wifissid
+    password: !secret wifipass
+  - ssid: !secret wifissid2
+    password: !secret wifipass
   #fast_connect: on #we only have one WiFi AP so just use the first one that matches
   ap: #since we listed an SSID above, this AP mode will only enable if no WiFi connection could be made
     ssid: ${friendly_name}_AP
-    password: "one word"
-  # use_address: bulb9.local
+    password: !secret wifipass
 
 # Enable Captive Portal on the AP mode, to make it easy to change the wifi settings if they fail
 captive_portal:
