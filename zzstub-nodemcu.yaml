@@ -1,0 +1,240 @@
+substitutions:
+  device_name: zzstub
+  device_description: stub firmware to manually flash to NodeMCU ESP8266 boards, just to enable OTA for later
+  friendly_name: zzstub
+
+esphome:
+  name: ${device_name}
+  comment: ${device_description}
+
+esp8266:
+  board: nodemcuv2
+  restore_from_flash: false #writes each state change to flash for switch or light with restore_mode: RESTORE_DEFAULT_OFF/ON, see https://esphome.io/components/esphome.html#esp8266-restore-from-flash
+
+wifi:
+  networks:
+  - ssid: !secret wifissid
+    password: !secret wifipass
+  - ssid: !secret wifissid2
+    password: !secret wifipass
+  #fast_connect: on #we only have one WiFi AP so just use the first one that matches
+  ap: #since we listed an SSID above, this AP mode will only enable if no WiFi connection could be made
+    ssid: ${friendly_name}_AP
+    password: !secret wifipass
+
+# Enable Captive Portal on the AP mode, to make it easy to change the wifi settings if they fail
+captive_portal:
+
+# Enable logging
+logger:
+  # baud_rate: 0 #disable UART logging since we aren't connected to GPIO1 TX
+  level: debug
+
+# Enable Debug component
+debug:
+  update_interval: 30s
+
+# Disable Home Assistant API since we don't want this stub firmware added to Home Assistant
+# api:
+
+# Enable OTA updates
+ota:
+
+# Enable web server
+web_server:
+  port: 80
+
+# Individual on/off sensors
+binary_sensor:
+# Reports when the button is pressed
+- platform: gpio
+  pin:
+    number: D3 #"Flash" button on GPIO0
+    mode: INPUT_PULLUP
+    inverted: True
+  name: ${friendly_name} Flash Button
+  on_press:
+    - light.toggle: led_d0
+    - light.toggle: led_d4
+
+# Reports if this device is Connected or not
+- platform: status
+  name: ${friendly_name} Status
+  entity_category: "diagnostic"
+
+# Individual data sensors
+sensor:
+
+# Reports the WiFi signal strength/RSSI in dB, see https://esphome.io/components/sensor/wifi_signal.html
+- platform: wifi_signal
+  name: ${friendly_name} Signal
+  id: wifi_signal_db
+  update_interval: 60s
+  entity_category: "diagnostic"
+
+# Reports the WiFi signal strength in %
+- platform: copy
+  source_id: wifi_signal_db
+  name: ${friendly_name} Signal Percent
+  filters:
+    - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+  unit_of_measurement: "Signal %"
+  entity_category: "diagnostic"
+
+# Reports how long the device has been powered (in minutes)
+- platform: uptime
+  name: ${friendly_name} Uptime
+  filters:
+    - lambda: return x / 60.0;
+  unit_of_measurement: minutes
+  entity_category: "diagnostic"
+
+# Reports program info every 30s
+- platform: debug
+  free:
+    name: ${friendly_name} Heap Free
+    entity_category: "diagnostic"
+  fragmentation:
+    name: ${friendly_name} Heap Fragmentation
+    entity_category: "diagnostic"
+  block:
+    name: ${friendly_name} Heap Max Block
+    entity_category: "diagnostic"
+  loop_time:
+    name: ${friendly_name} Loop Time
+    entity_category: "diagnostic"
+
+#Uses the ADC to see the VCC, should be around 3.3V
+- platform: adc
+  pin: VCC
+  name: ${friendly_name} VCC Voltage
+  entity_category: "diagnostic"
+
+# Individual text sensors
+text_sensor:
+
+# Reports the ESPHome Version with compile date
+- platform: version
+  name: ${friendly_name} ESPHome Version
+  entity_category: "diagnostic"
+
+# Reports the reset reason
+- platform: debug
+  device:
+    name: ${friendly_name} Device Info
+    entity_category: "diagnostic"
+  reset_reason:
+    name: ${friendly_name} Reset Reason
+    entity_category: "diagnostic"
+
+# Reports the connected WiFi info
+- platform: wifi_info
+  ip_address:
+    name: ${friendly_name} IP Address
+    entity_category: "diagnostic"
+  ssid:
+    name: ${friendly_name} Connected SSID
+    entity_category: "diagnostic"
+  bssid:
+    name: ${friendly_name} Connected BSSID
+    entity_category: "diagnostic"
+  mac_address:
+    name: ${friendly_name} Mac Wifi Address
+    entity_category: "diagnostic"
+  scan_results:
+    name: ${friendly_name} ESP Latest Scan Results
+    entity_category: "diagnostic"
+
+# Output pins
+output:
+- platform: esp8266_pwm
+  id: led_d0_output
+  pin: D0 #blue LED inverted on NodeMCU
+  inverted: True
+
+- platform: esp8266_pwm
+  id: led_d4_output
+  pin: D4 #blue LED inverted on ESP-12E module itself
+  inverted: True
+
+# Light devices
+light:
+# blue LED inverted on NodeMCU
+- platform: monochromatic
+  name: ${friendly_name} Blue LED D0
+  output: led_d0_output
+  id: led_d0
+  effects:
+    - strobe:
+    - flicker:
+        alpha: 50% #The percentage that the last color value should affect the light. More or less the “forget-factor” of an exponential moving average. Defaults to 95%.
+        intensity: 50% #The intensity of the flickering, basically the maximum amplitude of the random offsets. Defaults to 1.5%.
+    - lambda:
+        name: Throb
+        update_interval: 1s
+        lambda: |-
+          static int state = 0;
+          auto call = id(led_d0).turn_on();
+          // Transtion of 1000ms = 1s
+          call.set_transition_length(1000);
+          if (state == 0) {
+            call.set_brightness(1.0);
+          } else {
+            call.set_brightness(0.01);
+          }
+          call.perform();
+          state += 1;
+          if (state == 2)
+            state = 0;
+
+# blue LED inverted on ESP-12E module itself
+- platform: monochromatic
+  name: ${friendly_name} Blue LED D4
+  output: led_d4_output
+  id: led_d4
+  effects:
+    - strobe:
+    - flicker:
+        alpha: 50% #The percentage that the last color value should affect the light. More or less the “forget-factor” of an exponential moving average. Defaults to 95%.
+        intensity: 50% #The intensity of the flickering, basically the maximum amplitude of the random offsets. Defaults to 1.5%.
+    - lambda:
+        name: Throb
+        update_interval: 1s
+        lambda: |-
+          static int state = 0;
+          auto call = id(led_d4).turn_on();
+          // Transtion of 1000ms = 1s
+          call.set_transition_length(1000);
+          if (state == 0) {
+            call.set_brightness(1.0);
+          } else {
+            call.set_brightness(0.01);
+          }
+          call.perform();
+          state += 1;
+          if (state == 2)
+            state = 0;
+
+# Blink a light if we aren't connected to WiFi. Could use https://esphome.io/components/status_led.html instead but then we couldn't use this light for other things as well.
+interval:
+- interval: 500ms
+  then:
+  - if:
+      condition:
+        not:
+          wifi.connected:
+      then:
+        - light.turn_on:
+            id: led_d4
+            brightness: 100%
+            transition_length: 0s
+        - delay: 250ms
+        - light.turn_off:
+            id: led_d4
+            transition_length: 250ms
+
+#status_led:
+#  pin:
+#    number: D4
+#    inverted: True
+#  id: led_status

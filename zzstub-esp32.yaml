@@ -1,0 +1,144 @@
+substitutions:
+  device_name: zzstub
+  device_description: stub firmware to manually flash to ESP32 devices while they are opened-up, just to enable OTA for later
+  friendly_name: zzstub
+
+esphome:
+  name: ${device_name}
+  comment: ${device_description}
+
+esp32:
+  board: esp32dev #is this generic enough?
+
+wifi:
+  networks:
+  - ssid: !secret wifissid
+    password: !secret wifipass
+  - ssid: !secret wifissid2
+    password: !secret wifipass
+  #fast_connect: on #we only have one WiFi AP so just use the first one that matches
+  ap: #since we listed an SSID above, this AP mode will only enable if no WiFi connection could be made
+    ssid: ${friendly_name}_AP
+    password: !secret wifipass
+
+# Enable Captive Portal on the AP mode, to make it easy to change the wifi settings if they fail
+captive_portal:
+
+# Enable logging
+logger:
+  # baud_rate: 0 #disable UART logging since we aren't connected to GPIO1 TX
+  level: debug
+
+# Enable Debug component
+debug:
+  update_interval: 30s
+
+# Disable Home Assistant API since we don't want this stub firmware added to Home Assistant
+# api:
+
+# Enable OTA updates
+ota:
+
+# Enable web server
+web_server:
+  port: 80
+
+# Individual on/off sensors
+binary_sensor:
+# Reports if this device is Connected or not
+- platform: status
+  name: ${friendly_name} Status
+  entity_category: "diagnostic"
+
+# Individual data sensors
+sensor:
+
+# Reports the integrated temperature sensor of the ESP32. Some ESP32 variants return a large amount of invalid temperature values. Invalid measurements are ignored by this component.
+- platform: internal_temperature
+  name: ${friendly_name} Internal Temperature
+  filters:
+    - lambda: return x * (9.0/5.0) + 32.0;
+  unit_of_measurement: °F
+  accuracy_decimals: 2
+  entity_category: "diagnostic"
+
+# Reports the integrated hall effect sensor of the ESP32 chip to measure the magnitude and direction of magnetic field around the chip (with quite poor accuracy).
+# Uses pins GPIO36 and GPIO39 for the internal low-noise amplifier used by the hall sensor.
+- platform: esp32_hall
+  name: ${friendly_name} ESP32 Hall Sensor
+  update_interval: 60s
+  entity_category: "diagnostic"
+
+# Reports the WiFi signal strength/RSSI in dB, see https://esphome.io/components/sensor/wifi_signal.html
+- platform: wifi_signal
+  name: ${friendly_name} Signal
+  id: wifi_signal_db
+  update_interval: 60s
+  entity_category: "diagnostic"
+
+# Reports the WiFi signal strength in %
+- platform: copy
+  source_id: wifi_signal_db
+  name: ${friendly_name} Signal Percent
+  filters:
+    - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+  unit_of_measurement: "Signal %"
+  entity_category: "diagnostic"
+
+# Reports how long the device has been powered (in minutes)
+- platform: uptime
+  name: ${friendly_name} Uptime
+  filters:
+    - lambda: return x / 60.0;
+  unit_of_measurement: minutes
+  entity_category: "diagnostic"
+
+# Reports program info every 30s
+- platform: debug
+  free:
+    name: ${friendly_name} Heap Free
+    entity_category: "diagnostic"
+  # fragmentation:
+  #   name: ${friendly_name} Heap Fragmentation
+  #   entity_category: "diagnostic"
+  block:
+    name: ${friendly_name} Heap Max Block
+    entity_category: "diagnostic"
+  loop_time:
+    name: ${friendly_name} Loop Time
+    entity_category: "diagnostic"
+
+# Individual text sensors
+text_sensor:
+
+# Reports the ESPHome Version with compile date
+- platform: version
+  name: ${friendly_name} ESPHome Version
+  entity_category: "diagnostic"
+
+# Reports the reset reason
+- platform: debug
+  device:
+    name: ${friendly_name} Device Info
+    entity_category: "diagnostic"
+  reset_reason:
+    name: ${friendly_name} Reset Reason
+    entity_category: "diagnostic"
+
+# Reports the connected WiFi info
+- platform: wifi_info
+  ip_address:
+    name: ${friendly_name} IP Address
+    entity_category: "diagnostic"
+  ssid:
+    name: ${friendly_name} Connected SSID
+    entity_category: "diagnostic"
+  bssid:
+    name: ${friendly_name} Connected BSSID
+    entity_category: "diagnostic"
+  mac_address:
+    name: ${friendly_name} Mac Wifi Address
+    entity_category: "diagnostic"
+  scan_results:
+    name: ${friendly_name} ESP Latest Scan Results
+    entity_category: "diagnostic"
